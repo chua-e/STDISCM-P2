@@ -7,10 +7,29 @@ use std::path::Path;
 fn main() {
     let filename = "config.txt";
     let (n_instances, fastest_time, slowest_time) = read_config(filename);
+
+    println!("Enter number of players in party queue by tank, healer, and DPS separated by space (i.e. `10 20 30`)");
+    println!();
+    print!("Input: ");
+    io::stdout().flush().unwrap();
+
+    let mut input = String::new(); 
+    io::stdin().read_line(&mut input).expect("Player types needed.");
+    let players: Vec<i32> = input.trim().split_whitespace().map(|s| s.parse().expect("Invalid number")).collect();
+
+    if players.len() < 3 {
+        eprintln!("There should be at least 3 integers.");
+    }
+
+    let t = players[0];
+    let h = players[1];
+    let d = players [2];
+
+    
 }
 
 /**
- * Reads the config file in the format where 
+ * Reads the config file in the format where --
  */
 fn read_config(filename: &str) -> (u64, u64, u64) {
     let mut n: u64 = 0;
