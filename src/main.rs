@@ -4,7 +4,8 @@ use std::io::{Write};
 use std::fs::File;
 use std::path::Path;
 
-fn main() {
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
     let filename = "config.txt";
     let (n_instances, fastest_time, slowest_time) = read_config(filename);
 
@@ -25,7 +26,7 @@ fn main() {
     let h = players[1];
     let d = players [2];
 
-    
+
 }
 
 /**
