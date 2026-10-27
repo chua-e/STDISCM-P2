@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 use tokio::sync::{Semaphore};
 use tokio::time::{sleep, Duration};
+use rand::Rng;
 
 struct Party {
     id: u32,
@@ -15,14 +16,47 @@ struct Instance {
     total_time: u32
 }
 
-async fn assign(n: u32, t: u32, h: u32, d: u32) {
-    let mut tank_count = t;
-    let mut healer_count = h;
-    let mut dps_count = d;
+pub async fn assign(n: u32, t: u32, h: u32, d: u32, t1: u32, t2: u32) {
+    let parties = t.min(h).min(d / 3);
 
-    let permits = Arc::new(Semaphore::new(n.try_into().unwrap()));
-    let semaphore = permits.clone();
-    let _permit = semaphore.acquire_owned().await.unwrap();
+    let semaphore = Arc::new(Semaphore::new(n as usize));
+    let instances = Arc::new(Mutex::new(
+        (0..n).map(|_| Instance { status: false, parties_served: 0, total_time: 0 })
+            .collect::<Vec<_>>(),
+    ));
+
+    let mut handles = Vec::new();
+
+    for party in 1..=parties {
+        let permit = semaphore.clone().acquire_owned().await.unwrap();
+        let instances = Arc::clone(&instances);
+
+        handles.push(tokio::spawn(async move {
+            let _permit = permit;
+        }));
+
+        let slots = {
+            let mut inst = instances.lock().unwrap();
+            let i = inst.iter().position(|x| !x.status).unwrap();
+            inst[i].status = true;
+
+            i
+        };
+
+        let time = rand::random_range(t1..t2);
+        sleep(Duration::from_secs(time)).await;
+
+        {
+            let mut inst = instances.lock().unwrap();
+            inst[slot].status = false;
+            inst[slot].parties_serves += 1;
+            inst[slot].total_time += time;
+        }   
+    }
+
+    for handle in handles {
+        handle.await.unwrap();
+    }
 }
 
 fn matchmaker (t: u32, h: u32, d: u32) -> (u32, u32, u32, u32) {
