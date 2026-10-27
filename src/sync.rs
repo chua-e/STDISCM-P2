@@ -1,14 +1,8 @@
+use std::println;
 use std::sync::{Arc, Mutex};
 use tokio::sync::{Semaphore};
 use tokio::time::{sleep, Duration};
 use rand::Rng;
-
-struct Party {
-    id: u32,
-    tanks: u32,
-    healers: u32,
-    dps: u32
-}
 
 struct Instance {
     status: bool,
@@ -17,7 +11,7 @@ struct Instance {
 }
 
 pub async fn assign(n: u32, t: u32, h: u32, d: u32, t1: u32, t2: u32) {
-    let parties = t.min(h).min(d / 3);
+    let (parties, left_t, left_h, left_d) = matchmaker(t, h, d);
 
     let semaphore = Arc::new(Semaphore::new(n as usize));
     let instances = Arc::new(Mutex::new(
@@ -27,64 +21,77 @@ pub async fn assign(n: u32, t: u32, h: u32, d: u32, t1: u32, t2: u32) {
 
     let mut handles = Vec::new();
 
-    for party in 1..=parties {
+    for _party in 1..=parties {
         let permit = semaphore.clone().acquire_owned().await.unwrap();
         let instances = Arc::clone(&instances);
 
         handles.push(tokio::spawn(async move {
             let _permit = permit;
+
+            let slot = {
+                let mut inst = instances.lock().unwrap();
+                let i = inst.iter().position(|x| !x.status).unwrap();
+                inst[i].status = true;
+                print_status(&inst);
+
+                i
+            };
+
+            let time = rand::random_range(t1..=t2);
+            sleep(Duration::from_secs(time as u64)).await;
+
+            {
+                let mut inst = instances.lock().unwrap();
+                inst[slot].status = false;
+                inst[slot].parties_served += 1;
+                inst[slot].total_time += time;
+                print_status(&inst);
+            }   
         }));
-
-        let slots = {
-            let mut inst = instances.lock().unwrap();
-            let i = inst.iter().position(|x| !x.status).unwrap();
-            inst[i].status = true;
-
-            i
-        };
-
-        let time = rand::random_range(t1..t2);
-        sleep(Duration::from_secs(time)).await;
-
-        {
-            let mut inst = instances.lock().unwrap();
-            inst[slot].status = false;
-            inst[slot].parties_serves += 1;
-            inst[slot].total_time += time;
-        }   
     }
 
     for handle in handles {
         handle.await.unwrap();
     }
+
+    let inst = instances.lock().unwrap();
+    print_summary(&inst, left_h, left_t, left_d);
 }
 
 fn matchmaker (t: u32, h: u32, d: u32) -> (u32, u32, u32, u32) {
-    let mut total = t + h + d;
-    let mut remaining_tanks = t;
-    let mut remaining_healers = h;
-    let mut remaining_dps = d;
+    let parties = t.min(h).min(d / 3);
+    let remaining_tanks = t - parties;
+    let remaining_healers = h - parties;
+    let remaining_dps = d - (parties*3);
 
-    if total >= 5 {
-        if remaining_dps >= 3 {
-            remaining_dps = remaining_dps - 3;
-            total = total - 3;
-        }
-
-        if remaining_healers >= 1 {
-            remaining_healers = remaining_healers - 1;
-            total = total - 1;
-        }
-
-        if remaining_tanks >= 1 {
-            remaining_tanks = remaining_tanks - 1;
-            total = total - 1;
-        }
-    }
-
-    return (total, remaining_tanks, remaining_healers, remaining_dps);
+    return (parties, remaining_tanks, remaining_healers, remaining_dps);
 }
 
-// fn print_reqs () {
+fn print_status(inst: &Vec<Instance>) {
+    for (i, x) in inst.iter().enumerate() {
+        println!("Instance {}: {}", i + 1, if x.status { "active" } else { "empty" });
+    }
+    println!();
+}
 
-// }
+fn print_summary(inst: &Vec<Instance>, left_h: u32, left_t: u32, left_d: u32) {
+    let mut total_parties = 0;
+    let mut total_time = 0;
+
+    println!("Summary: ");
+
+    for (i, x) in inst.iter().enumerate() {
+        println!("Instance {}:", i + 1);
+        println!("Parties served - {}", x.parties_served);
+        println!("Total time - {} seconds", x.total_time);
+        println!();
+
+        total_parties += x.parties_served;
+        total_time += x.total_time;
+    }
+
+    println!("Total summary:");
+    println!("Total parties served - {}", total_parties);
+    println!("Total time served - {} seconds", total_time);
+    println!("Leftover players: {} tanks, {} healers, {} DPS", left_t, left_h, left_d);
+}

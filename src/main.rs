@@ -1,13 +1,27 @@
 use std::io::BufRead;
-use std::{io, println};
+use std::{eprintln, io, println};
 use std::io::{Write};
 use std::fs::File;
 use std::path::Path;
+use STDISCM_P2::sync::assign;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     let filename = "config.txt";
-    let (n_instances, fastest_time, slowest_time) = read_config(filename);
+    let (n_instances, start, end) = read_config(filename);
+
+    if n_instances <= 0 {
+        eprintln!("Instances need to be greater than or equal to 1.");
+        return;
+    }
+
+    if start > end {
+        eprintln!("Start of the time range must be lesser than the end of the time range.");
+        return;
+    } else if end > 15 {
+        eprintln!("Maximum time range ends at 15.");
+        return;
+    }
 
     println!("Enter number of players in party queue by tank, healer, and DPS separated by space (i.e. `10 20 30`)");
     println!();
@@ -16,26 +30,27 @@ async fn main() {
 
     let mut input = String::new(); 
     io::stdin().read_line(&mut input).expect("Player types needed.");
-    let players: Vec<i32> = input.trim().split_whitespace().map(|s| s.parse().expect("Invalid number")).collect();
+    let players: Vec<u32> = input.trim().split_whitespace().map(|s| s.parse().expect("Invalid number")).collect();
 
     if players.len() < 3 {
         eprintln!("There should be at least 3 integers.");
+        return
     }
 
     let t = players[0];
     let h = players[1];
     let d = players [2];
 
-
+    assign(n_instances, t, h, d, start, end).await;
 }
 
 /**
  * Reads the config file in the format where --
  */
-fn read_config(filename: &str) -> (u64, u64, u64) {
-    let mut n: u64 = 0;
-    let mut t1: u64 = 0;
-    let mut t2: u64 = 0;
+fn read_config(filename: &str) -> (u32, u32, u32) {
+    let mut n: u32 = 0;
+    let mut t1: u32 = 0;
+    let mut t2: u32 = 0;
 
     let path = Path::new(filename);
     let file = match File::open(&path) {
@@ -56,15 +71,15 @@ fn read_config(filename: &str) -> (u64, u64, u64) {
                 let second_token = tokens.next().unwrap_or("");
 
                 if first_token == "n" {
-                    if let Ok(instances) = second_token.parse::<u64>() {
+                    if let Ok(instances) = second_token.parse::<u32>() {
                         n = instances;
                     }
                 } else if first_token == "t1" {
-                    if let Ok(bott_time) = second_token.parse::<u64>() {
+                    if let Ok(bott_time) = second_token.parse::<u32>() {
                         t1 = bott_time;
                     }
                 } else if first_token == "t2" {
-                    if let Ok(top_time) = second_token.parse::<u64>() {
+                    if let Ok(top_time) = second_token.parse::<u32>() {
                         t2 = top_time;
                     }
                 }
