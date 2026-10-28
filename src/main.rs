@@ -45,7 +45,8 @@ async fn main() {
 }
 
 /**
- * Reads the config file in the format where --
+ * Reads the config file in the format where a singular integer is
+ * expected after each variable (n, t1, t2)
  */
 fn read_config(filename: &str) -> (u32, u32, u32) {
     let mut n: u32 = 0;
